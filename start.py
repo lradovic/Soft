@@ -21,16 +21,16 @@ def read_idx(filename):
     shape = tuple(struct.unpack('>I', f.read(4))[0] for d in range(dims))
     return lr.fromstring(f.read(), dtype=lr.uint8).reshape(shape)
 
-def load_image(path):
-  return cv2.cvtColor(cv2.imread(path), cv2.COLOR_BGR2RGB)
+#def load_image(path):
+#  return cv2.cvtColor(cv2.imread(path), cv2.COLOR_BGR2RGB)
 
-nbins = 9 # broj binova (unutar histograma ima 9 elemenata)
-cell_size = (8, 8) # broj piksela po celiji
-block_size = (3, 3) # broj celija po bloku
+nbins = 9 # histogram ima 9 elemenata
+cell_size = (8, 8) # piksel po celiji
+block_size = (3, 3) # celije po bloku
 
-def reshape_data(input_data):
-  nsamples, nx, ny = input_data.shape
-  return input_data.reshape((nsamples, nx*ny))
+def reshape_data(data):
+  n, nx, ny = data.shape
+  return data.reshape((n, nx*ny))
 
 def istrenirajKNN():
 
@@ -44,7 +44,8 @@ def istrenirajKNN():
     image_dir_pos = 'data/trainingSet/'+str(i)
     for img_name in os.listdir(image_dir_pos):
       img_path = os.path.join(image_dir_pos, img_name)
-      img = load_image(img_path)
+      #img = load_image(img_path)
+      img=cv2.cvtColor(cv2.imread(img_path), cv2.COLOR_BGR2RGB)
       hog = cv2.HOGDescriptor(_winSize=(img.shape[1] // cell_size[1] * cell_size[1], 
                                     img.shape[0] // cell_size[0] * cell_size[0]),
                           _blockSize=(block_size[1] * cell_size[1],
@@ -55,13 +56,18 @@ def istrenirajKNN():
       images.append(hog.compute(img))
       labels.append(i)
 
+  #pretvaramo u niz
   images = lr.array(images)
+  #pretvaramo u niz
   labels = lr.array(labels)
 
+  #dovodimo u iste dimenzije za treniranje
   x_train = reshape_data(images)
 
   print(x_train.shape)
   print(labels.shape)
+  
+  #treniramo za 10 cifara KNN
   knn = neighbors.KNeighborsClassifier(n_neighbors=10).fit(x_train,labels)
 
   #digit = load_digits()
@@ -119,9 +125,10 @@ def najmanjeRastojanje(contour, objekti):
   minD = minO.euklid(contour)
 
   for o in objekti:
-    dist = o.euklid(contour)
-    if dist < minD:
-      minD = dist
+    ras = o.euklid(contour)
+
+    if ras < minD:
+      minD = ras
       minO = o
 
   return {'objekat': minO, 'euklid': minD}
@@ -142,6 +149,7 @@ def dodajOkvir(x,y,w,h,saOkvirom):
   bottom = prosirenjeH
   left = prosirenjeW
   right = prosirenjeW+((28-w)%2)
+  
 
   gotovo= cv2.copyMakeBorder(saOkvirom,top,bottom,left,right,cv2.BORDER_CONSTANT,value=[0,0,0])
 
@@ -196,8 +204,6 @@ def koordinateLinije(frejm,uspelo):
 
   #hocemo da sklonimo tackice
   #primenjujemo eroziju i dilaciju
-  #zovemo nasu metodu za sredjivanje
-
   kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (2, 2))
 
   brIteracijaErozija = 1
@@ -260,12 +266,11 @@ def obradiSliku(frejm,uspelo):
 
   return obradjenaSlika
 
-zbir=[]
+zbir=[] #globalna promenljiva za zbir
 
 def obradiFrejmove(videoFajl,pocetakX,pocetakY,krajX,krajY):
 
   video =  cv2.VideoCapture(videoFajl)
-
   
   objekti=[]
   sledeciId= 0
@@ -274,9 +279,8 @@ def obradiFrejmove(videoFajl,pocetakX,pocetakY,krajX,krajY):
   while(video.isOpened()):
 
     uspelo, frejm = video.read() 
-
+    brFrejmova+=1
     #cv2.imshow('jaqhkjdhakj',frejm)
-
 
     if uspelo is not True:
       break
@@ -288,8 +292,8 @@ def obradiFrejmove(videoFajl,pocetakX,pocetakY,krajX,krajY):
 
       obradjena = obradiSliku(frejm, uspelo)
 
-      img, contours, hierarchy = cv2.findContours(obradjena, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-      print(len(contours))
+      img, konture, hhh = cv2.findContours(obradjena, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+      print(len(konture))
 
       lll = frejm.copy()
       #cv2.drawContours(lll, contours, -1, (255, 0, 0), 1)
@@ -302,11 +306,13 @@ def obradiFrejmove(videoFajl,pocetakX,pocetakY,krajX,krajY):
 
       #region = img[y:y+h+1,x:x+w+1]
 
-      for i in range(0,len(contours)):
+      for i in range(0,len(konture)):
         
-        kontura = contours[i]
+        kontura = konture[i]
+
         x,y,w,h = cv2.boundingRect(kontura)
-        if ((w > 1 and h > 14) or (w>14 and h>5)) and (w<=28 and h<=28) and hierarchy[0][i][3] == -1:
+
+        if ((w > 1 and h > 14) or (w>14 and h>5)) and (w<=28 and h<=28) and hhh[0][i][3] == -1:
           
           mini = najmanjeRastojanje(kontura,objekti)
 
@@ -426,28 +432,6 @@ def main():
       print(z)
       zbir.append(z)
 
-     
-      #img = cv2.imread('data/testSample/img_17.jpg', 1)
-      #plt.imshow(img)
-      #plt.savefig('novi.jpg')
-      #hog = cv2.HOGDescriptor(_winSize=(img.shape[1] // cell_size[1] * cell_size[1], 
-      #                           # img.shape[0] // cell_size[0] * cell_size[0]),
-       #                 _blockSize=(block_size[1] * cell_size[1],
-        #                            block_size[0] * cell_size[0]),
-         #               _blockStride=(cell_size[1], cell_size[0]),
-          #              _cellSize=(cell_size[1], cell_size[0]),
-           #             _nbins=nbins)
-      
-      
-      #vrednost = knnMetoda(lr.array(hog.compute(img)))
-      #print(vrednost)
-      
-
-
-      #if brojac is 0:
-       # return
-      #plt.imshow(proba)
-      #plt.savefig('z.png')
   fajl = open("out.txt",'w')
     
   fajl.write('RA 115/2015 Luka Radovic\n'
